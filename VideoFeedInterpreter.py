@@ -1,4 +1,5 @@
 """
+Takes frames from video_feed and does tensorflow's magic tricks
 Adapted from https://github.com/EdjeElectronics/TensorFlow-Lite-Object-Detection-on-Android-and-Raspberry-Pi/blob/master/TFLite_detection_stream.py
 """
 import threading
@@ -7,7 +8,6 @@ from tensorflow.lite.python.interpreter import Interpreter
 # from tflite_runtime.interpreter as interpreter for linux environments
 import os
 import numpy as np
-import copy
 import cv2
 
 
