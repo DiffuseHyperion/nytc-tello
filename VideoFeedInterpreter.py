@@ -5,14 +5,18 @@ Adapted from https://github.com/EdjeElectronics/TensorFlow-Lite-Object-Detection
 import threading
 
 from tensorflow.lite.python.interpreter import Interpreter
+import tflite_support.task
 # from tflite_runtime.interpreter as interpreter for linux environments
 import os
 import numpy as np
 import cv2
 
+TF1_MODEL = 1
+TF2_MODEL = 2
+
 
 class VideoFeedIntepreter:
-    def __init__(self, video_feed, model_dir, minimum_confidence):
+    def __init__(self, video_feed, model_dir, minimum_confidence, model_type):
         self.video_feed = video_feed
         self.frame = np.zeros([300, 400, 3], dtype=np.uint8)
         self.running = True
@@ -50,10 +54,14 @@ class VideoFeedIntepreter:
         # because outputs are ordered differently for TF2 and TF1 models
         self.outname = self.output_details[0]['name']
 
-        if 'StatefulPartitionedCall' in self.outname:  # This is a TF2 model
+        if model_type == 2:
+            # This is a TF2 model
             self.boxes_idx, self.classes_idx, self.scores_idx = 1, 3, 0
-        else:  # This is a TF1 model
+        elif model_type == 1:
+            # This is a TF1 model
             self.boxes_idx, self.classes_idx, self.scores_idx = 0, 1, 2
+        else:
+            raise ValueError("Invalid model type given!")
 
         threading.Thread(target=self._frame_interpreter).start()
 

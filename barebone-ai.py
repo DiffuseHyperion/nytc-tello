@@ -1,10 +1,9 @@
 from djitellopy import Tello
 from VideoFeed import VideoFeed
-from VideoFeedInterpreter import VideoFeedIntepreter
+import VideoFeedInterpreter
 import threading
 import cv2
 import os
-import sys
 
 
 class VideoThread:
@@ -13,8 +12,10 @@ class VideoThread:
         self.running = True
         self.tello = tello_object
         self.video_feed = VideoFeed(tello_object)
-        self.video_feed_interpreter = VideoFeedIntepreter(self.video_feed,
-                                                          os.path.join(os.getcwd(), "models", "mobilenet"), 0.5)
+        self.video_feed_interpreter = VideoFeedInterpreter.VideoFeedIntepreter(self.video_feed,
+                                                                               os.path.join(os.getcwd(), "models",
+                                                                                            "mobilenet"),
+                                                                               0.5, VideoFeedInterpreter.TF1_MODEL)
 
         threading.Thread(target=self._video).start()
 
@@ -38,10 +39,11 @@ class VideoThread:
             cv2.imshow("Video", ai_frame)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
+                print("Stopping video!")
                 # self.tello.land()
                 self.tello.end()
                 self.running = False
-                sys.exit()
+        print("Thread ending!")
 
 
 tello = Tello()
