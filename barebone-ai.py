@@ -14,7 +14,7 @@ class VideoThread:
         self.tello = tello_object
         self.video_feed = VideoFeed(tello_object)
         self.video_feed_interpreter = VideoFeedIntepreter(self.video_feed,
-                                                          os.path.join(os.getcwd(), "models", "mscoco"), 0.5)
+                                                          os.path.join(os.getcwd(), "models", "mobilenet"), 0.5)
 
         threading.Thread(target=self._video).start()
 
