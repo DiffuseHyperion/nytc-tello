@@ -4,9 +4,9 @@ Adapted from https://github.com/EdjeElectronics/TensorFlow-Lite-Object-Detection
 """
 import threading
 
-from tensorflow.lite.python.interpreter import Interpreter
+#from tensorflow.lite.python.interpreter import Interpreter
 import tflite_support.task
-# from tflite_runtime.interpreter as interpreter for linux environments
+from tflite_runtime.interpreter import Interpreter
 import os
 import numpy as np
 import cv2
