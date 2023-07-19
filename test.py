@@ -1,12 +1,10 @@
 import cv2
 import threading
+import matplotlib.pyplot as plt
 
-""" Working example
 pic = cv2.imread("yippee.jpg")
-cv2.imshow("test", pic)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-"""
+plt.imshow(pic)
+plt.show()
 
 """ Working example
 def test():

@@ -1,6 +1,7 @@
 import time
 
 import cv2
+import matplotlib.pyplot as plt
 from djitellopy import Tello
 
 from VideoFeed import VideoFeed
@@ -19,14 +20,14 @@ class VideoThread:
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
     def run(self):
-        cv2.startWindowThread()
         while self.running:
             print("start loop")
             frame = self.video_feed.get_frame()
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             self._add_batt_text(frame)
             print("Showing frame!")
-            cv2.imshow("Video", frame) # Hangs here
+            plt.imshow(frame) # Hangs here
+            plt.show()
             print("Frame shown")
             cv2.waitKey(0)
             cv2.destroyAllWindows()
