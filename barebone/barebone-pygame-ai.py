@@ -18,9 +18,9 @@ class VideoThread:
         self.screen = pygame.display.set_mode((960, 720))
         self.video_feed = VideoFeed(tello_object)
         self.video_feed_interpreter = VideoFeedInterpreter.VideoFeedIntepreter(self.video_feed,
-                                                                               os.path.join(os.getcwd(), "../models",
+                                                                               os.path.join(os.getcwd(), "..", "models",
                                                                                             "mscoco"),
-                                                                               0.5, VideoFeedInterpreter.TF2_MODEL)
+                                                                               0.5)
 
     def _add_batt_text(self, frame):
         text = "Battery: " + str(self.tello.get_battery()) + "%"
@@ -32,14 +32,14 @@ class VideoThread:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    self.tello.end()
                     self.video_feed.stop()
+                    self.tello.end()
                     break
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE:
                         self.running = True
-                        self.tello.end()
                         self.video_feed.stop()
+                        self.tello.end()
                         break
 
             self.screen.fill(([0, 0, 0]))
