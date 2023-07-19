@@ -20,7 +20,6 @@ class VideoFeedIntepreter:
         self.video_feed = video_feed
         self.frame = np.zeros([300, 400, 3], dtype=np.uint8)
         self.running = True
-        self.minimum_confidence = minimum_confidence
         self.image_width = 960  # very real 720p video :))))
         self.image_height = 720
 
@@ -32,7 +31,7 @@ class VideoFeedIntepreter:
 
         # Enable Coral by this setting
         classification_options = processor.ClassificationOptions(
-            max_results=1, score_threshold=0.5)
+            max_results=1, score_threshold=minimum_confidence)
         options = vision.ImageClassifierOptions(
             base_options=base_options, classification_options=classification_options)
 
