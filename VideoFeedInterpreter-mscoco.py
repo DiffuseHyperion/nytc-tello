@@ -11,7 +11,7 @@ import numpy as np
 import cv2
 
 
-class VideoFeedIntepreter:
+class VideoFeedInterpreter:
     def __init__(self, video_feed, model_dir, minimum_confidence):
         self.video_feed = video_feed
         self.frame = np.zeros([300, 400, 3], dtype=np.uint8)

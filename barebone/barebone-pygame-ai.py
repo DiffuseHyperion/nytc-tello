@@ -1,6 +1,6 @@
 from djitellopy import Tello
 from VideoFeed import VideoFeed
-import VideoFeedInterpreter
+from VideoFeedInterpreter_support import VideoFeedInterpreter
 import time
 import cv2
 import os
@@ -17,10 +17,10 @@ class VideoThread:
         self.tello = tello_object
         self.screen = pygame.display.set_mode((960, 720))
         self.video_feed = VideoFeed(tello_object)
-        self.video_feed_interpreter = VideoFeedInterpreter.VideoFeedIntepreter(self.video_feed,
-                                                                               os.path.join(os.getcwd(), "..", "models",
-                                                                                            "mscoco"),
-                                                                               0.5)
+        self.video_feed_interpreter = VideoFeedInterpreter(self.video_feed,
+                                                           os.path.join(os.getcwd(), "..", "models",
+                                                                        "efficientdet"),
+                                                           0.5)
 
     def _add_batt_text(self, frame):
         text = "Battery: " + str(self.tello.get_battery()) + "%"

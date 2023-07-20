@@ -56,9 +56,13 @@ class VideoFeedInterpreter:
         results = np.squeeze(output_data)
         print(results)
         top_k = results.argsort()[-5:][::-1]
+        print(top_k)
 
         for i in top_k:
             if self.floating_model:
                 print('{:08.6f}: {}'.format(float(results[i]), self.labels[i]))
             else:
                 print('{:08.6f}: {}'.format(float(results[i] / 255.0), self.labels[i]))
+
+    def get_frame(self):
+        return self.frame
