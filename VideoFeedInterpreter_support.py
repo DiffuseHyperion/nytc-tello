@@ -27,7 +27,6 @@ class VideoFeedInterpreter:
         self.image_height = 720
 
         path_to_model = os.path.join(model_dir, "model.tflite")
-        path_to_labels = os.path.join(model_dir, "labels.txt")
 
         base_options = core.BaseOptions(
             file_name=path_to_model, use_coral=False, num_threads=1)

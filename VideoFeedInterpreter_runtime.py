@@ -26,12 +26,6 @@ class VideoFeedInterpreter:
         with open(path_to_labels, 'r') as f:
             self.labels = [line.strip() for line in f.readlines()]
 
-        # Have to do a weird fix for label map if using the COCO "starter model" from
-        # https://www.tensorflow.org/lite/models/object_detection/overview
-        # First label is '???', which has to be removed.
-        if self.labels[0] == '???':
-            del (self.labels[0])
-
         self.tfint = Interpreter(model_path=path_to_model)
 
         self.tfint.allocate_tensors()

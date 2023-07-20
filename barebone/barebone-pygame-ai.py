@@ -1,6 +1,5 @@
 from djitellopy import Tello
 from VideoFeed import VideoFeed
-from VideoFeedInterpreter_support import VideoFeedInterpreter
 import time
 import cv2
 import os
@@ -10,6 +9,13 @@ import numpy as np
 pygame.init()
 
 model_name = input("What model should be used? (efficientdet) ") or "efficientdet"
+library_name = int(input("What library should be used? 0 = tflite_runtime / 1 = tflite_support (1)")) or 1
+if library_name == 0:
+    from VideoFeedInterpreter_runtime import VideoFeedInterpreter
+elif library_name == 1:
+    from VideoFeedInterpreter_support import VideoFeedInterpreter
+else:
+    raise ValueError("Invalid library chosen!")
 
 
 class VideoThread:

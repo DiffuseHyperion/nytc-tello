@@ -1,9 +1,17 @@
 from djitellopy import Tello
 from VideoFeed import VideoFeed
-import VideoFeedInterpreter
 import threading
 import cv2
 import os
+
+model_name = input("What model should be used? (efficientdet) ") or "efficientdet"
+library_name = int(input("What library should be used? 0 = tflite_runtime / 1 = tflite_support (1)")) or 1
+if library_name == 0:
+    from VideoFeedInterpreter_runtime import VideoFeedInterpreter
+elif library_name == 1:
+    from VideoFeedInterpreter_support import VideoFeedInterpreter
+else:
+    raise ValueError("Invalid library chosen!")
 
 
 class VideoThread:
@@ -12,10 +20,10 @@ class VideoThread:
         self.running = True
         self.tello = tello_object
         self.video_feed = VideoFeed(tello_object)
-        self.video_feed_interpreter = VideoFeedInterpreter.VideoFeedIntepreter(self.video_feed,
-                                                                               os.path.join(os.getcwd(), "../models",
-                                                                                            "mscoco"),
-                                                                               0.5, VideoFeedInterpreter.TF1_MODEL)
+        self.video_feed_interpreter = VideoFeedInterpreter(self.video_feed,
+                                                           os.path.join(os.getcwd(), "../models",
+                                                                        model_name),
+                                                           0.5)
 
         threading.Thread(target=self._video).start()
 
