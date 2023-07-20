@@ -9,6 +9,8 @@ import numpy as np
 
 pygame.init()
 
+model_name = input("What model should be used? (efficientdet) ") or "efficientdet"
+
 
 class VideoThread:
 
@@ -19,7 +21,7 @@ class VideoThread:
         self.video_feed = VideoFeed(tello_object)
         self.video_feed_interpreter = VideoFeedInterpreter(self.video_feed,
                                                            os.path.join(os.getcwd(), "..", "models",
-                                                                        "efficientdet"),
+                                                                        model_name),
                                                            0.5)
 
     def _add_batt_text(self, frame):
