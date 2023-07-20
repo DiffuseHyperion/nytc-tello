@@ -5,7 +5,7 @@ import cv2
 import os
 
 model_name = input("What model should be used? (efficientdet-lite2) ") or "efficientdet-lite2"
-library_name = int(input("What library should be used? 0 = tflite_runtime / 1 = tflite_support (1)")) or 1
+library_name = int(input("What library should be used? 0 = tflite_runtime / 1 = tflite_support (1)") or 1)
 if library_name == 0:
     from VideoFeedInterpreter_runtime import VideoFeedInterpreter
 elif library_name == 1:
