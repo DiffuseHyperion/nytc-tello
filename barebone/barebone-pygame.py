@@ -48,6 +48,7 @@ class VideoThread:
             pygame.display.flip()
 
 
+
 tello = Tello()
 tello.connect()
 video = VideoThread(tello)

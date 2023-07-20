@@ -1,68 +1,64 @@
-"""
-Takes frames from video_feed and does tensorflow's magic tricks
-Adapted from https://github.com/EdjeElectronics/TensorFlow-Lite-Object-Detection-on-Android-and-Raspberry-Pi/blob/master/TFLite_detection_stream.py
-"""
-import threading
-
-#from tensorflow.lite.python.interpreter import Interpreter
-#from tflite_runtime.interpreter import Interpreter
-from tflite_support.task import core # might be cheating, idk though lol
-from tflite_support.task import processor
-from tflite_support.task import vision
-
 import os
-import numpy as np
+import threading
 import cv2
+import numpy as np
+from tflite_runtime.interpreter import Interpreter
 
 
-class VideoFeedIntepreter:
+class VideoFeedInterpreter:
+
     def __init__(self, video_feed, model_dir, minimum_confidence):
         self.video_feed = video_feed
         self.frame = np.zeros([300, 400, 3], dtype=np.uint8)
         self.running = True
+        self.minimum_confidence = minimum_confidence
         self.image_width = 960  # very real 720p video :))))
         self.image_height = 720
+        self.input_mean = 127.5
+        self.input_std = 127.5
 
         path_to_model = os.path.join(model_dir, "model.tflite")
         path_to_labels = os.path.join(model_dir, "labels.txt")
 
-        base_options = core.BaseOptions(
-            file_name=path_to_model, use_coral=False, num_threads=1)
+        with open(path_to_labels, 'r') as f:
+            self.labels = [line.strip() for line in f.readlines()]
 
-        # Enable Coral by this setting
-        classification_options = processor.ClassificationOptions(
-            max_results=1, score_threshold=minimum_confidence)
-        options = vision.ImageClassifierOptions(
-            base_options=base_options, classification_options=classification_options)
+        self.interpreter = Interpreter(model_path=path_to_model)
+        self.interpreter.allocate_tensors()
 
-        self.classifier = vision.ImageClassifier.create_from_options(options)
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
 
-        threading.Thread(target=self._frame_interpreter).start()
+        # check the type of the input tensor
+        self.floating_model = self.input_details[0]['dtype'] == np.float32
 
-    def _frame_interpreter(self):
-        while self.running:
-            # Acquire frame and resize to expected shape [1xHxWx3]
-            frame = self.video_feed.get_frame()
+        # NxHxWxC, H:1, W:2
+        self.height = self.input_details[0]['shape'][1]
+        self.width = self.input_details[0]['shape'][2]
 
-            # Convert the image from BGR to RGB as required by the TFLite model.
-            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        threading.Thread(target=self._frame_interpreter_thread).start()
 
-            # Create TensorImage from the RGB image
-            tensor_image = vision.TensorImage.create_from_array(rgb_image)
-            # List classification results
-            categories = self.classifier.classify(tensor_image)
-            for idx, category in enumerate(categories.classifications[0].categories):
-                category_name = category.category_name
-                score = round(category.score, 2)
-                result_text = category_name + ' (' + str(score) + ')'
-                text_location = (24, (idx + 2) * 20)
-                cv2.putText(frame, result_text, text_location, cv2.FONT_HERSHEY_PLAIN,
-                            1, (0, 0, 255), 1)
+    def _frame_interpreter_thread(self):
+        frame = self.video_feed.get_frame()
 
-            self.frame = frame
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_resized = cv2.resize(frame_rgb, (self.width, self.height))
+        input_data = np.expand_dims(frame_resized, axis=0)
 
-    def stop(self):
-        self.running = False
+        if self.floating_model:
+            input_data = (np.float32(input_data) - self.input_mean) / self.input_std
 
-    def get_frame(self):
-        return self.frame
+        # Perform the actual detection by running the model with the image as input
+        self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
+        self.interpreter.invoke()
+        output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
+        print(output_data)
+        results = np.squeeze(output_data)
+        print(results)
+        top_k = results.argsort()[-5:][::-1]
+
+        for i in top_k:
+            if self.floating_model:
+                print('{:08.6f}: {}'.format(float(results[i]), self.labels[i]))
+            else:
+                print('{:08.6f}: {}'.format(float(results[i] / 255.0), self.labels[i]))

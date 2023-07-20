@@ -19,7 +19,7 @@ class VideoThread:
         self.video_feed = VideoFeed(tello_object)
         self.video_feed_interpreter = VideoFeedInterpreter.VideoFeedIntepreter(self.video_feed,
                                                                                os.path.join(os.getcwd(), "..", "models",
-                                                                                            "mobilenetv1"),
+                                                                                            "mscoco"),
                                                                                0.5)
 
     def _add_batt_text(self, frame):
