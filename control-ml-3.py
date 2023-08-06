@@ -1,3 +1,22 @@
+"""
+An incredibly over engineered solution to the long detection time.
+Video thread will now contain a deque (a two way list, you can add from the top and bottom).
+Every tick (dictated by fps), a future (an object that returns a value later) will be added onto the back of the deque.
+Then, a thread will be created to run object detection on the current frame,
+and pass the result frame to the future.
+
+The video thread will now wait for the top future to finish before it displays that frame
+and removes the future from the deque, waiting for the next frame.
+
+Pros:
+Theoretically perfect framerate
+More frames shown, as its no longer blocked by existing frame object detection
+Cons:
+Significantly more resource intensive
+Frames will have a noticeable latency
+Screenshots might be wonky
+"""
+
 from djitellopy import Tello
 import cv2
 import pygame
@@ -9,6 +28,9 @@ import time
 from sys import platform  # Used to detect computer platform (Windows, Linux, etc)
 from VideoRead import VideoRead  # Used to get frames from video camera, see line 116
 import threading  # Used to run code concurrently with each other, see line 202
+
+from collections import deque
+from asyncio import Future
 
 # This ensures compatability with Windows PCs because tflite_runtime does not exist for Windows
 if platform == "linux" or platform == "linux2":
@@ -45,7 +67,7 @@ confidence_threshold = 0.5
 S = 60
 # Frames per second of the pygame window display
 # A low number results in input lag, as input information is processed once per frame
-FPS = 120
+FPS = 60
 # Settings for frame size
 FRAME_WIDTH = 960
 FRAME_HEIGHT = 660
@@ -140,69 +162,76 @@ class FrontEnd(object):
                 elif event.type == pygame.KEYUP:
                     self.keyup(event.key)
 
+    def video_manager(self):
+        # Queue: NEWEST FRAME -----> OLDEST FRAME
+        queue = deque()
+        while not self.should_stop:
+            # Queue next frame
+            future_frame = Future()
+            threading.Thread(target=self.video_routine, args=[future_frame, self.frame_read.get_frame()]).start()
+            queue.appendleft(Future)
+
+            # Query incoming frame
+            incoming_frame = queue[0]
+            if incoming_frame.done():
+                new_image = queue.pop()
+                new_image = np.rot90(new_image)
+                new_image = np.flipud(new_image)
+
+                frame = pygame.surfarray.make_surface(new_image)
+                self.screen.blit(frame, (0, 0))
+                pygame.display.update()
+            time.sleep(1 / FPS)
+
     ### START OF CUSTOM SECTION ###
     # Method for video_thread, see method run()
-    def video_routine(self):
-        print("start video")
-    ### END OF CUSTOM SECTION ###
-        while not self.should_stop:
-            print("video looping")
-            #self.screen.fill([0, 0, 0])
+    def video_routine(self, future: Future, frame: np.ndarray):
+        ### END OF CUSTOM SECTION ###
 
-            # Read and resize image
-            original_shape = np.shape(self.frame_read.get_frame())
-            input_shape = self.input_details[0]['shape']
-            new_image = cv2.resize(self.frame_read.get_frame(), (input_shape[1], input_shape[2]))
+        # Read and resize image
+        original_shape = np.shape(frame)
+        input_shape = self.input_details[0]['shape']
+        new_image = cv2.resize(frame, (input_shape[1], input_shape[2]))
 
-            self.interpreter.set_tensor(self.input_details[0]['index'], [new_image])
-            start_time = time.time()
-            self.interpreter.invoke()
-            time_taken = time.time() - start_time
-            print("Took " + str(time_taken) + " seconds")
+        self.interpreter.set_tensor(self.input_details[0]['index'], [new_image])
+        start_time = time.time()
+        self.interpreter.invoke()
+        time_taken = time.time() - start_time
+        print("Took " + str(time_taken) + " seconds")
 
-            boxes = self.interpreter.get_tensor(self.output_details[0]['index']).squeeze()
-            classes = self.interpreter.get_tensor(self.output_details[1]['index']).squeeze()
-            scores = self.interpreter.get_tensor(self.output_details[2]['index']).squeeze()
+        boxes = self.interpreter.get_tensor(self.output_details[0]['index']).squeeze()
+        classes = self.interpreter.get_tensor(self.output_details[1]['index']).squeeze()
+        scores = self.interpreter.get_tensor(self.output_details[2]['index']).squeeze()
 
-            for i in range(len(scores)):
-                if scores[i] > confidence_threshold:
-                    # Unnormalize boundaries
-                    unnormed_coords = boxes[i] * input_shape[1]
-                    start_point = (int(unnormed_coords[1]), int(unnormed_coords[0]))
-                    end_point = (int(unnormed_coords[3]), int(unnormed_coords[2]))
-                    # Draw bounding box
-                    drawn = cv2.rectangle(new_image, start_point, end_point, color=(0, 255, 0), thickness=2)
-                    # Add label and score
-                    img_text = f"{self.labels[int(classes[i])]}: {scores[i]:.3f}"
-                    output_label = cv2.putText(new_image, img_text,
-                                               (int(unnormed_coords[1]), int(unnormed_coords[0]) + 15),
-                                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-                else:
-                    break
+        for i in range(len(scores)):
+            if scores[i] > confidence_threshold:
+                # Unnormalize boundaries
+                unnormed_coords = boxes[i] * input_shape[1]
+                start_point = (int(unnormed_coords[1]), int(unnormed_coords[0]))
+                end_point = (int(unnormed_coords[3]), int(unnormed_coords[2]))
+                # Draw bounding box
+                drawn = cv2.rectangle(new_image, start_point, end_point, color=(0, 255, 0), thickness=2)
+                # Add label and score
+                img_text = f"{self.labels[int(classes[i])]}: {scores[i]:.3f}"
+                output_label = cv2.putText(new_image, img_text,
+                                           (int(unnormed_coords[1]), int(unnormed_coords[0]) + 15),
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+            else:
+                break
 
-                # counter = 0
+            # counter = 0
 
-            frame = self.frame_read.get_frame()
-            new_image = cv2.resize(new_image, (original_shape[1], original_shape[0]))
-            # Display battery
-            text = "Battery: {}%".format(self.tello.get_battery())
-            cv2.putText(new_image, text, (5, FRAME_HEIGHT - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        new_image = cv2.resize(new_image, (original_shape[1], original_shape[0]))
+        # Display battery
+        text = "Battery: {}%".format(self.tello.get_battery())
+        cv2.putText(new_image, text, (5, FRAME_HEIGHT - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-            # Display last snapshot timing
-            text = "Last snapshot: {}".format(self.last_snapshot)
-            cv2.putText(new_image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
+        # Display last snapshot timing
+        text = "Last snapshot: {}".format(self.last_snapshot)
+        cv2.putText(new_image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
 
-            self.new_image = new_image
-
-            new_image = np.rot90(new_image)
-            new_image = np.flipud(new_image)
-
-            frame = pygame.surfarray.make_surface(new_image)
-            self.screen.blit(frame, (0, 0))
-            pygame.display.update()
-
-            time.sleep(1 / FPS)
+        future.set_result(new_image)
 
     def run(self):
         ### START OF CUSTOM SECTION ###
@@ -210,7 +239,7 @@ class FrontEnd(object):
         # Create video and event threads
         # Threads allow code to run with other code at the same time, without both code blocking each other.
         event_thread = threading.Thread(target=self.event_routine)
-        video_thread = threading.Thread(target=self.video_routine)
+        video_thread = threading.Thread(target=self.video_manager())
 
         # Start threads
         event_thread.start()

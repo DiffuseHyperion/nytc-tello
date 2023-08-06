@@ -49,6 +49,8 @@ class VideoRead:
                         self.container.close()
                         break
             except av.error.ExitError:
+                print("No frames found!")
+                time.sleep(0.5)
                 continue
             except av.error.InvalidDataError:
                 continue

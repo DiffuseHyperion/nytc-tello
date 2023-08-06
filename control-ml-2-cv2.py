@@ -68,11 +68,6 @@ class FrontEnd(object):
         # Init pygame
         pygame.init()
 
-        # Create pygame window 
-        pygame.display.set_caption("Tello video stream")
-        # Set width and height
-        self.screen = pygame.display.set_mode([FRAME_WIDTH, FRAME_HEIGHT])
-
         # Init Tello object that interacts with the Tello drone
         self.tello = Tello()
 
@@ -130,10 +125,8 @@ class FrontEnd(object):
             for event in pygame.event.get():
                 if event.type == pygame.USEREVENT + 1:
                     self.update()
-                elif event.type == pygame.QUIT:
-                    self.should_stop = True
                 elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
+                    if event.key == pygame.K_q:
                         self.should_stop = True
                     else:
                         self.keydown(event.key)
@@ -195,12 +188,8 @@ class FrontEnd(object):
 
             self.new_image = new_image
 
-            new_image = np.rot90(new_image)
-            new_image = np.flipud(new_image)
-
-            frame = pygame.surfarray.make_surface(new_image)
-            self.screen.blit(frame, (0, 0))
-            pygame.display.update()
+            cv2.imshow("Tello Video Stream", new_image)
+            cv2.waitKey(1)
 
             time.sleep(1 / FPS)
 
@@ -222,6 +211,7 @@ class FrontEnd(object):
 
         # Stop video feed
         self.frame_read.stop()
+        cv2.destroyAllWindows()
         ### END OF CUSTOM SECTION ###
         # Call it always before finishing. To deallocate resources.
         self.tello.end()
