@@ -1,0 +1,2 @@
+red_rectangle
+blue_triangle
