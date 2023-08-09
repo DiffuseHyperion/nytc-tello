@@ -33,7 +33,7 @@ from collections import deque # Deque stands for "double-ended queue",
 # basically a list but you can add items to it from both ends. This is used for frame queue system.
 from asyncio import Future # This is used for the frame queue system.
 
-BUFFERED_FRAMES = 10 # How many frames in start object detection in advance. See explanation image for details.
+BUFFERED_FRAMES = 5 # How many frames in start object detection in advance. See explanation image for details.
 # This should vary based on available threads/cpu cores on the host system.
 
 # This ensures compatability with Windows PCs because tflite_runtime does not exist for Windows
