@@ -29,8 +29,12 @@ from sys import platform  # Used to detect computer platform (Windows, Linux, et
 from VideoRead import VideoRead  # Used to get frames from video camera, see line 116
 import threading  # Used to run code concurrently with each other, see line 202
 
-from collections import deque
-from asyncio import Future
+from collections import deque # Deque stands for "double-ended queue",
+# basically a list but you can add items to it from both ends. This is used for frame queue system.
+from asyncio import Future # This is used for the frame queue system.
+
+BUFFERED_FRAMES = 10 # How many frames in start object detection in advance. See explanation image for details.
+# This should vary based on available threads/cpu cores on the host system.
 
 # This ensures compatability with Windows PCs because tflite_runtime does not exist for Windows
 if platform == "linux" or platform == "linux2":
@@ -162,18 +166,29 @@ class FrontEnd(object):
                 elif event.type == pygame.KEYUP:
                     self.keyup(event.key)
 
+    ### START OF CUSTOM SECTION ###
+    # Handles the frame queue system.
+    # Every frame (dictated by FPS constant), this method will create a Future and a video_routine thread,
+    # and add it into a deque. Then, it checks if the oldest frame has finished object detection.
+    # If it has, it will show the produced frame and remove it from the queue, then start appropriate threads
+    # which got pushed into the "buffer zone". This way, delays between each frame found in v2 is minimized as
+    # object detection was done beforehand, rather than on the spot.
     def video_manager(self):
         # Queue: NEWEST FRAME -----> OLDEST FRAME
         queue = deque()
         while not self.should_stop:
             # Queue next frame
             future_frame = Future()
-            threading.Thread(target=self.video_routine, args=[future_frame, self.frame_read.get_frame()]).start()
-            queue.appendleft(Future)
+            future_thread = \
+                threading.Thread(target=self.video_routine, args=[future_frame, self.frame_read.get_frame()])
+            queue.appendleft((future_frame, future_thread))
+            if len(queue) <= BUFFERED_FRAMES:
+                future_thread.start()
 
             # Query incoming frame
-            incoming_frame = queue[0]
+            incoming_frame: Future = queue[0][0]
             if incoming_frame.done():
+                # Show incoming frame
                 new_image = queue.pop()
                 new_image = np.rot90(new_image)
                 new_image = np.flipud(new_image)
@@ -181,9 +196,12 @@ class FrontEnd(object):
                 frame = pygame.surfarray.make_surface(new_image)
                 self.screen.blit(frame, (0, 0))
                 pygame.display.update()
-            time.sleep(1 / FPS)
 
-    ### START OF CUSTOM SECTION ###
+                # Start object detection on appropriate thread
+                if len(queue) >= BUFFERED_FRAMES:
+                    incoming_thread: threading.Thread = queue[BUFFERED_FRAMES - 1][1]
+                    incoming_thread.start()
+            time.sleep(1 / FPS)
     # Method for video_thread, see method run()
     def video_routine(self, future: Future, frame: np.ndarray):
         ### END OF CUSTOM SECTION ###
@@ -231,7 +249,9 @@ class FrontEnd(object):
         text = "Last snapshot: {}".format(self.last_snapshot)
         cv2.putText(new_image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
 
+        ### START OF CUSTOM SECTION ###
         future.set_result(new_image)
+        ### END OF CUSTOM SECTION ###
 
     def run(self):
         ### START OF CUSTOM SECTION ###
