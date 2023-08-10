@@ -121,11 +121,7 @@ class FrontEnd(object):
         self.frame_read = VideoRead(self.tello)
         ### END OF CUSTOM SECTION ###
 
-    ### START OF CUSTOM SECTION ###
-    # Method for event_thread, see method run()
-    def event_routine(self):
-        print("start event")
-    ### END OF CUSTOM SECTION ###
+    def run(self):
         while not self.should_stop:
             for event in pygame.event.get():
                 if event.type == pygame.USEREVENT + 1:
@@ -140,14 +136,7 @@ class FrontEnd(object):
                 elif event.type == pygame.KEYUP:
                     self.keyup(event.key)
 
-    ### START OF CUSTOM SECTION ###
-    # Method for video_thread, see method run()
-    def video_routine(self):
-        print("start video")
-    ### END OF CUSTOM SECTION ###
-        while not self.should_stop:
-            print("video looping")
-            #self.screen.fill([0, 0, 0])
+            self.screen.fill([0, 0, 0])
 
             # Read and resize image
             original_shape = np.shape(self.frame_read.get_frame())
@@ -158,7 +147,7 @@ class FrontEnd(object):
             start_time = time.time()
             self.interpreter.invoke()
             time_taken = time.time() - start_time
-            print("Took " + str(time_taken) + " seconds")
+            estimated_fps = 1 / time_taken
 
             boxes = self.interpreter.get_tensor(self.output_details[0]['index']).squeeze()
             classes = self.interpreter.get_tensor(self.output_details[1]['index']).squeeze()
@@ -193,6 +182,12 @@ class FrontEnd(object):
             text = "Last snapshot: {}".format(self.last_snapshot)
             cv2.putText(new_image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
 
+            ### START OF CUSTOM SECTION ###
+            # Display estimated FPS cause why not
+            text = "Estimated FPS: {}".format(round(estimated_fps, 2))
+            cv2.putText(new_image, text, (5, FRAME_HEIGHT - 75), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
+            ### END OF CUSTOM SECTION ###
+
             self.new_image = new_image
 
             new_image = np.rot90(new_image)
@@ -203,23 +198,7 @@ class FrontEnd(object):
             pygame.display.update()
 
             time.sleep(1 / FPS)
-
-    def run(self):
         ### START OF CUSTOM SECTION ###
-        print("start run")
-        # Create video and event threads
-        # Threads allow code to run with other code at the same time, without both code blocking each other.
-        event_thread = threading.Thread(target=self.event_routine)
-        video_thread = threading.Thread(target=self.video_routine)
-
-        # Start threads
-        event_thread.start()
-        video_thread.start()
-
-        # Wait for both threads to finish, in this case when the code is stopped by event_thread
-        event_thread.join()
-        video_thread.join()
-
         # Stop video feed
         self.frame_read.stop()
         ### END OF CUSTOM SECTION ###

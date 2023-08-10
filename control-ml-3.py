@@ -1,12 +1,7 @@
 """
-An incredibly over engineered solution to the long detection time.
+An incredibly overengineered solution to the long detection time.
 Video thread will now contain a deque (a two way list, you can add from the top and bottom).
 Every tick (dictated by fps), a future (an object that returns a value later) will be added onto the back of the deque.
-Then, a thread will be created to run object detection on the current frame,
-and pass the result frame to the future.
-
-The video thread will now wait for the top future to finish before it displays that frame
-and removes the future from the deque, waiting for the next frame.
 
 Pros:
 Theoretically perfect framerate
@@ -26,15 +21,15 @@ import time
 ### CUSTOM SECTION ###
 
 from sys import platform  # Used to detect computer platform (Windows, Linux, etc)
+
 from VideoRead import VideoRead  # Used to get frames from video camera, see line 116
 import threading  # Used to run code concurrently with each other, see line 202
 
 from collections import deque # Deque stands for "double-ended queue",
 # basically a list but you can add items to it from both ends. This is used for frame queue system.
-from asyncio import Future # This is used for the frame queue system.
+from FrameInterpreterManager import FrameInterpreterManager
 
-BUFFERED_FRAMES = 5 # How many frames in start object detection in advance. See explanation image for details.
-# This should vary based on available threads/cpu cores on the host system.
+BUFFERED_FRAMES = 5 # How many frames in start object detection in advance.
 
 # This ensures compatability with Windows PCs because tflite_runtime does not exist for Windows
 if platform == "linux" or platform == "linux2":
@@ -115,11 +110,6 @@ class FrontEnd(object):
 
         self.send_rc_control = False
 
-        # Import labels 
-        with open(label_path, "r") as f:
-            self.labels = [line.strip() for line in f.readlines()]
-            f.close()
-
         # Initialize TFLite model and allocate tensors
         self.interpreter = Interpreter(model_path=model_path)
         self.interpreter.allocate_tensors()
@@ -145,13 +135,11 @@ class FrontEnd(object):
         # Did this because the method in djitellopy kinna sucks and crashes when there are no more frames from the video feed
         # My method simply waits and retry getting frames later instead
         self.frame_read = VideoRead(self.tello)
+
+        self.frame_manager = FrameInterpreterManager(5, model_path, label_path, 0.5, self.frame_read, FPS)
         ### END OF CUSTOM SECTION ###
 
-    ### START OF CUSTOM SECTION ###
-    # Method for event_thread, see method run()
-    def event_routine(self):
-        print("start event")
-    ### END OF CUSTOM SECTION ###
+    def run(self):
         while not self.should_stop:
             for event in pygame.event.get():
                 if event.type == pygame.USEREVENT + 1:
@@ -166,111 +154,22 @@ class FrontEnd(object):
                 elif event.type == pygame.KEYUP:
                     self.keyup(event.key)
 
-    ### START OF CUSTOM SECTION ###
-    # Handles the frame queue system.
-    # Every frame (dictated by FPS constant), this method will create a Future and a video_routine thread,
-    # and add it into a deque. Then, it checks if the oldest frame has finished object detection.
-    # If it has, it will show the produced frame and remove it from the queue, then start appropriate threads
-    # which got pushed into the "buffer zone". This way, delays between each frame found in v2 is minimized as
-    # object detection was done beforehand, rather than on the spot.
-    def video_manager(self):
-        # Queue: NEWEST FRAME -----> OLDEST FRAME
-        queue = deque()
-        while not self.should_stop:
-            # Queue next frame
-            future_frame = Future()
-            future_thread = \
-                threading.Thread(target=self.video_routine, args=[future_frame, self.frame_read.get_frame()])
-            queue.appendleft((future_frame, future_thread))
-            if len(queue) <= BUFFERED_FRAMES:
-                future_thread.start()
+            self.screen.fill([0, 0, 0])
 
-            # Query incoming frame
-            incoming_frame: Future = queue[0][0]
-            if incoming_frame.done():
-                # Show incoming frame
-                new_image = queue.pop()
-                new_image = np.rot90(new_image)
-                new_image = np.flipud(new_image)
+            outgoing_queue: deque = self.frame_manager.get_outgoing_queue()
+            if len(outgoing_queue) <= 0:
+                continue
+            print("Showing outgoing frame!")
+            outgoing_frame: np.ndarray = outgoing_queue.pop()
+            frame = pygame.surfarray.make_surface(outgoing_frame)
+            self.screen.blit(frame, (0, 0))
+            pygame.display.update()
 
-                frame = pygame.surfarray.make_surface(new_image)
-                self.screen.blit(frame, (0, 0))
-                pygame.display.update()
-
-                # Start object detection on appropriate thread
-                if len(queue) >= BUFFERED_FRAMES:
-                    incoming_thread: threading.Thread = queue[BUFFERED_FRAMES - 1][1]
-                    incoming_thread.start()
             time.sleep(1 / FPS)
-    # Method for video_thread, see method run()
-    def video_routine(self, future: Future, frame: np.ndarray):
-        ### END OF CUSTOM SECTION ###
-
-        # Read and resize image
-        original_shape = np.shape(frame)
-        input_shape = self.input_details[0]['shape']
-        new_image = cv2.resize(frame, (input_shape[1], input_shape[2]))
-
-        self.interpreter.set_tensor(self.input_details[0]['index'], [new_image])
-        start_time = time.time()
-        self.interpreter.invoke()
-        time_taken = time.time() - start_time
-        print("Took " + str(time_taken) + " seconds")
-
-        boxes = self.interpreter.get_tensor(self.output_details[0]['index']).squeeze()
-        classes = self.interpreter.get_tensor(self.output_details[1]['index']).squeeze()
-        scores = self.interpreter.get_tensor(self.output_details[2]['index']).squeeze()
-
-        for i in range(len(scores)):
-            if scores[i] > confidence_threshold:
-                # Unnormalize boundaries
-                unnormed_coords = boxes[i] * input_shape[1]
-                start_point = (int(unnormed_coords[1]), int(unnormed_coords[0]))
-                end_point = (int(unnormed_coords[3]), int(unnormed_coords[2]))
-                # Draw bounding box
-                drawn = cv2.rectangle(new_image, start_point, end_point, color=(0, 255, 0), thickness=2)
-                # Add label and score
-                img_text = f"{self.labels[int(classes[i])]}: {scores[i]:.3f}"
-                output_label = cv2.putText(new_image, img_text,
-                                           (int(unnormed_coords[1]), int(unnormed_coords[0]) + 15),
-                                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-            else:
-                break
-
-            # counter = 0
-
-        new_image = cv2.resize(new_image, (original_shape[1], original_shape[0]))
-        # Display battery
-        text = "Battery: {}%".format(self.tello.get_battery())
-        cv2.putText(new_image, text, (5, FRAME_HEIGHT - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-        # Display last snapshot timing
-        text = "Last snapshot: {}".format(self.last_snapshot)
-        cv2.putText(new_image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
-
         ### START OF CUSTOM SECTION ###
-        future.set_result(new_image)
-        ### END OF CUSTOM SECTION ###
-
-    def run(self):
-        ### START OF CUSTOM SECTION ###
-        print("start run")
-        # Create video and event threads
-        # Threads allow code to run with other code at the same time, without both code blocking each other.
-        event_thread = threading.Thread(target=self.event_routine)
-        video_thread = threading.Thread(target=self.video_manager())
-
-        # Start threads
-        event_thread.start()
-        video_thread.start()
-
-        # Wait for both threads to finish, in this case when the code is stopped by event_thread
-        event_thread.join()
-        video_thread.join()
-
         # Stop video feed
         self.frame_read.stop()
+        self.frame_manager.stop()
         ### END OF CUSTOM SECTION ###
         # Call it always before finishing. To deallocate resources.
         self.tello.end()
