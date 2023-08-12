@@ -48,7 +48,10 @@ S = 60
 FPS = 120
 # Settings for frame size
 FRAME_WIDTH = 960
-FRAME_HEIGHT = 660
+### START OF CUSTOM SECTION ###
+# google got their frame height wrong lol
+FRAME_HEIGHT = 720
+### END OF CUSTOM SECTION ###
 
 
 class FrontEnd(object):
