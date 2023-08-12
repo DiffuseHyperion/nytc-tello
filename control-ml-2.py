@@ -11,6 +11,7 @@ import time
 from sys import platform  # Used to detect computer platform (Windows, Linux, etc)
 from VideoRead import VideoRead  # Used to get frames from video camera, see line 116
 import threading  # Used to run code concurrently with each other, see line 202
+from PIL import Image
 
 # This ensures compatability with Windows PCs because tflite_runtime does not exist for Windows
 if platform == "linux" or platform == "linux2":
@@ -253,12 +254,12 @@ class FrontEnd(object):
                 processed_image = self._post_process_image(self._process_image(self.frame_read.get_frame()),
                                                            True,
                                                            False,
-                                                           True)
+                                                           False)
                 end_time = time.time() - start_time
                 print("Took {} seconds".format(end_time))
                 # Show processed frame in a seperate window
-                cv2.imshow("Screenshot", processed_image)
-                cv2.waitKey(0)
+                image = Image.fromarray(processed_image, "RGB")
+                image.show("Processed image")
 
                 # Save the processed frame as a file
                 cv2.imwrite(os.path.join(os.getcwd(), "picture-{}.png".format(self.last_snapshot)),
