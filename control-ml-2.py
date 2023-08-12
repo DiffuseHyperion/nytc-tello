@@ -106,9 +106,6 @@ class FrontEnd(object):
         # Allows for event_routine and video_routine to communicate between each other when to stop
         self.should_stop = False
 
-        # Allows video_routine to share finalized frames to screenshot function
-        self.new_image = None
-
         # Enable sending commands to the drone
         self.tello.connect()
 
@@ -120,6 +117,57 @@ class FrontEnd(object):
         # My method simply waits and retry getting frames later instead
         self.frame_read = VideoRead(self.tello)
         ### END OF CUSTOM SECTION ###
+
+    def _process_image(self, original_frame: np.ndarray):
+        # Read and resize image
+        original_shape = np.shape(original_frame)
+        input_shape = self.input_details[0]['shape']
+        new_image = cv2.resize(original_frame, (input_shape[1], input_shape[2]))
+
+        self.interpreter.set_tensor(self.input_details[0]['index'], [new_image])
+        self.interpreter.invoke()
+
+        boxes = self.interpreter.get_tensor(self.output_details[0]['index']).squeeze()
+        classes = self.interpreter.get_tensor(self.output_details[1]['index']).squeeze()
+        scores = self.interpreter.get_tensor(self.output_details[2]['index']).squeeze()
+
+        for i in range(len(scores)):
+            if scores[i] > confidence_threshold:
+                # Unnormalize boundaries
+                unnormed_coords = boxes[i] * input_shape[1]
+                start_point = (int(unnormed_coords[1]), int(unnormed_coords[0]))
+                end_point = (int(unnormed_coords[3]), int(unnormed_coords[2]))
+                # Draw bounding box
+                drawn = cv2.rectangle(new_image, start_point, end_point, color=(0, 255, 0), thickness=2)
+                # Add label and score
+                img_text = f"{self.labels[int(classes[i])]}: {scores[i]:.3f}"
+                cv2.putText(new_image, img_text, (int(unnormed_coords[1]), int(unnormed_coords[0]) + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
+            else:
+                break
+
+            # counter = 0
+
+        new_image = cv2.resize(new_image, (original_shape[1], original_shape[0]))
+
+        return new_image
+
+    def _post_process_image(self, image: np.ndarray, stats: bool, flipped: bool, colour: bool):
+        if stats:
+            # Display battery
+            text = "Battery: {}%".format(self.tello.get_battery())
+            cv2.putText(image, text, (5, FRAME_HEIGHT - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+            # Display last snapshot timing
+            text = "Last snapshot: {}".format(self.last_snapshot)
+            cv2.putText(image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
+        if flipped:
+            image = np.rot90(image)
+            image = np.flipud(image)
+        if colour:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return image
 
     def run(self):
         while not self.should_stop:
@@ -138,62 +186,8 @@ class FrontEnd(object):
 
             self.screen.fill([0, 0, 0])
 
-            # Read and resize image
-            original_shape = np.shape(self.frame_read.get_frame())
-            input_shape = self.input_details[0]['shape']
-            new_image = cv2.resize(self.frame_read.get_frame(), (input_shape[1], input_shape[2]))
-
-            self.interpreter.set_tensor(self.input_details[0]['index'], [new_image])
-            start_time = time.time()
-            self.interpreter.invoke()
-            time_taken = time.time() - start_time
-            estimated_fps = 1 / time_taken
-
-            boxes = self.interpreter.get_tensor(self.output_details[0]['index']).squeeze()
-            classes = self.interpreter.get_tensor(self.output_details[1]['index']).squeeze()
-            scores = self.interpreter.get_tensor(self.output_details[2]['index']).squeeze()
-
-            for i in range(len(scores)):
-                if scores[i] > confidence_threshold:
-                    # Unnormalize boundaries
-                    unnormed_coords = boxes[i] * input_shape[1]
-                    start_point = (int(unnormed_coords[1]), int(unnormed_coords[0]))
-                    end_point = (int(unnormed_coords[3]), int(unnormed_coords[2]))
-                    # Draw bounding box
-                    drawn = cv2.rectangle(new_image, start_point, end_point, color=(0, 255, 0), thickness=2)
-                    # Add label and score
-                    img_text = f"{self.labels[int(classes[i])]}: {scores[i]:.3f}"
-                    output_label = cv2.putText(new_image, img_text,
-                                               (int(unnormed_coords[1]), int(unnormed_coords[0]) + 15),
-                                               cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
-                else:
-                    break
-
-                # counter = 0
-
-            frame = self.frame_read.get_frame()
-            new_image = cv2.resize(new_image, (original_shape[1], original_shape[0]))
-            # Display battery
-            text = "Battery: {}%".format(self.tello.get_battery())
-            cv2.putText(new_image, text, (5, FRAME_HEIGHT - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-            # Display last snapshot timing
-            text = "Last snapshot: {}".format(self.last_snapshot)
-            cv2.putText(new_image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
-
-            ### START OF CUSTOM SECTION ###
-            # Display estimated FPS cause why not
-            text = "Estimated FPS: {}".format(round(estimated_fps, 2))
-            cv2.putText(new_image, text, (5, FRAME_HEIGHT - 75), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
-            ### END OF CUSTOM SECTION ###
-
-            self.new_image = new_image
-
-            new_image = np.rot90(new_image)
-            new_image = np.flipud(new_image)
-
-            frame = pygame.surfarray.make_surface(new_image)
+            frame = self._post_process_image(self.frame_read.get_frame(), True, True, False)
+            frame = pygame.surfarray.make_surface(frame)
             self.screen.blit(frame, (0, 0))
             pygame.display.update()
 
@@ -234,8 +228,19 @@ class FrontEnd(object):
             else:
                 self.text_color = (0, 0, 255)
 
-            # Press Enter to take picture with bounding box
-            cv2.imwrite(f"picture-{self.last_snapshot}.png", cv2.cvtColor(self.new_image, cv2.COLOR_BGR2RGB))
+            def process():
+                processed_image = self._post_process_image(self._process_image(self.frame_read.get_frame()),
+                                                           True,
+                                                           False,
+                                                           True)
+                cv2.imshow("Screenshot", processed_image)
+
+                # Press Enter to take picture with bounding box
+                cv2.imwrite(f"picture-{self.last_snapshot}.png",
+                            cv2.UMat(processed_image))
+                cv2.waitKey(0)
+
+            threading.Thread(target=process).start()
 
     def keyup(self, key):
         """
