@@ -118,9 +118,9 @@ class FrontEnd(object):
         # Set speed of drone, moved up here because nicer
         self.tello.set_speed(self.speed)
 
-        # VideoRead is my custom method of getting frames from the drone's video feed
-        # Did this because the method in djitellopy kinna sucks and crashes when there are no more frames from the video feed
-        # My method simply waits and retry getting frames later instead
+        # VideoRead is my custom method of getting frames from the drone's video feed Did this because the method in
+        # djitellopy kinna sucks and crashes when there are no more frames from the video feed My method simply waits
+        # and retry getting frames later instead
         self.frame_read = VideoRead(self.tello)
         ### END OF CUSTOM SECTION ###
 
@@ -148,7 +148,7 @@ class FrontEnd(object):
                 start_point = (int(unnormed_coords[1]), int(unnormed_coords[0]))
                 end_point = (int(unnormed_coords[3]), int(unnormed_coords[2]))
                 # Draw bounding box
-                drawn = cv2.rectangle(new_image, start_point, end_point, color=(0, 255, 0), thickness=2)
+                cv2.rectangle(new_image, start_point, end_point, color=(0, 255, 0), thickness=2)
                 # Add label and score
                 img_text = f"{self.labels[int(classes[i])]}: {scores[i]:.3f}"
                 cv2.putText(new_image, img_text, (int(unnormed_coords[1]), int(unnormed_coords[0]) + 15),
@@ -181,6 +181,7 @@ class FrontEnd(object):
         if colour:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
+
     ### END OF CUSTOM SECTION ###
 
     def run(self):
@@ -250,8 +251,7 @@ class FrontEnd(object):
                 processed_image = self._post_process_image(self._process_image(self.frame_read.get_frame()),
                                                            True,
                                                            False,
-                                                           True,
-                                                           -1)
+                                                           True)
                 end_time = time.time() - start_time
                 print("Took {} seconds".format(end_time))
                 # Show processed frame in a seperate window
