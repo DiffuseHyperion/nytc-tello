@@ -1,3 +1,5 @@
+import os.path
+
 from djitellopy import Tello
 import cv2
 import pygame
@@ -259,7 +261,7 @@ class FrontEnd(object):
                 cv2.waitKey(0)
 
                 # Save the processed frame as a file
-                cv2.imwrite(f"picture-{self.last_snapshot}.png",
+                cv2.imwrite(os.path.join(os.getcwd(), "picture-{}.png".format(self.last_snapshot)),
                             cv2.UMat(processed_image))
 
             # Run the above process in a thread, basically allowing it to run in the background on its own
