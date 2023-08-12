@@ -23,14 +23,16 @@ class VideoRead:
 
         time.sleep(1)
 
-        tries = 2
+        max_tries = 2
+        tries = max_tries
         while True:
             try:
                 self.container = av.open(self.tello.get_udp_video_address(), timeout=(5, None))
             except av.error.ExitError:
                 tries -= 1
                 if tries <= 0:
-                    raise TelloException("Failed to grab video feed after 2 tries! Try restarting the script.")
+                    raise TelloException("Failed to grab video feed after {} tries! Try restarting the script."
+                                         .format(max_tries))
                 else:
                     print("Failed to get video feed, trying again...")
                     continue

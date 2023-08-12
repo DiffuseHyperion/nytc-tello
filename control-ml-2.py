@@ -51,6 +51,8 @@ FRAME_WIDTH = 960
 ### START OF CUSTOM SECTION ###
 # google got their frame height wrong lol
 FRAME_HEIGHT = 720
+
+
 ### END OF CUSTOM SECTION ###
 
 
@@ -100,7 +102,8 @@ class FrontEnd(object):
         # Initialize TFLite model and allocate tensors
         self.interpreter = Interpreter(model_path=model_path)
         self.interpreter.allocate_tensors()
-        self.input_details, self.output_details = self.interpreter.get_input_details(), self.interpreter.get_output_details()
+        self.input_details, self.output_details = \
+            self.interpreter.get_input_details(), self.interpreter.get_output_details()
 
         # Create update timer
         pygame.time.set_timer(pygame.USEREVENT + 1, 1000 // FPS)
@@ -121,7 +124,11 @@ class FrontEnd(object):
         self.frame_read = VideoRead(self.tello)
         ### END OF CUSTOM SECTION ###
 
+    ### START OF CUSTOM SECTION ###
+    # Function to handle running object detection on an image.
+    # I seperated this from the "run" function since we no longer need to use this when flying normally.
     def _process_image(self, original_frame: np.ndarray):
+        ### END OF CUSTOM SECTION ###
         # Read and resize image
         original_shape = np.shape(original_frame)
         input_shape = self.input_details[0]['shape']
@@ -155,6 +162,9 @@ class FrontEnd(object):
 
         return new_image
 
+    ### START OF CUSTOM SECTION ###
+    # Handles adding additional stuff onto an image.
+    # This contains stats, flipping images and changing colours.
     def _post_process_image(self, image: np.ndarray, stats: bool, flipped: bool, colour: bool):
         if stats:
             # Display battery
@@ -171,6 +181,7 @@ class FrontEnd(object):
         if colour:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         return image
+    ### END OF CUSTOM SECTION ###
 
     def run(self):
         while not self.should_stop:
@@ -231,18 +242,28 @@ class FrontEnd(object):
             else:
                 self.text_color = (0, 0, 255)
 
+            ### START OF CUSTOM SECTION ###
+            # Function to process current frame, including object detection
             def process():
+                print("Processing image...")
+                start_time = time.time()
                 processed_image = self._post_process_image(self._process_image(self.frame_read.get_frame()),
                                                            True,
                                                            False,
-                                                           True)
+                                                           True,
+                                                           -1)
+                end_time = time.time() - start_time
+                print("Took {} seconds".format(end_time))
+                # Show processed frame in a seperate window
                 cv2.imshow("Screenshot", processed_image)
-
-                # Press Enter to take picture with bounding box
-                cv2.imwrite(f"picture-{self.last_snapshot}.png",
-                            cv2.UMat(processed_image))
                 cv2.waitKey(0)
 
+                # Save the processed frame as a file
+                cv2.imwrite(f"picture-{self.last_snapshot}.png",
+                            cv2.UMat(processed_image))
+
+            # Run the above process in a thread, basically allowing it to run in the background on its own
+            # This way, we can still retain control over the drone even while the object detection is taking place
             threading.Thread(target=process).start()
 
     def keyup(self, key):
