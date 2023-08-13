@@ -12,6 +12,7 @@ from sys import platform  # Used to detect computer platform (Windows, Linux, et
 from VideoRead import VideoRead  # Used to get frames from video camera, see line 116
 import threading  # Used to run code concurrently with each other, see line 202
 from PIL import Image
+import subprocess
 
 # This ensures compatability with Windows PCs because tflite_runtime does not exist for Windows
 if platform == "linux" or platform == "linux2":
@@ -257,13 +258,16 @@ class FrontEnd(object):
                                                            False)
                 end_time = time.time() - start_time
                 print("Took {} seconds".format(end_time))
+                path = os.path.join(os.getcwd(), "picture-{}.png".format(self.last_snapshot))
                 # Show processed frame in a seperate window
                 image = Image.fromarray(processed_image, "RGB")
-                image.show("Processed image")
-
-                # Save the processed frame as a file
-                cv2.imwrite(os.path.join(os.getcwd(), "picture-{}.png".format(self.last_snapshot)),
-                            cv2.UMat(processed_image))
+                image.save(path)
+                if platform == "linux" or platform == "linux2":
+                    # had major issues getting pillow's image.show working properly on linu. this uses a more low-level
+                    # approach
+                    subprocess.Popen(["feh", path])
+                elif platform == "win32":
+                    image.show()
 
             # Run the above process in a thread, basically allowing it to run in the background on its own
             # This way, we can still retain control over the drone even while the object detection is taking place
