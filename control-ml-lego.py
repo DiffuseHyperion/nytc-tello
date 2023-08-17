@@ -21,27 +21,10 @@ elif platform == "win32":
     from tensorflow.lite.python.interpreter import Interpreter
 
 # This makes it easier to swap between models
-loop = True
-base_path = ""
-while loop:
-    model = input("Enter the model you want to use: ([c]ircle/[l]ego/[sample]/[s]hapes): ")
-    base_path = "models/"
-    if model == "c" or model == "circle":
-        base_path += "circle/"
-    elif model == "l" or model == "lego":
-        base_path += "lego/"
-    elif model == "sample":
-        base_path += "sample/"
-    elif model == "s" or model == "shapes":
-        base_path += "shapes/"
-    else:
-        print("Unknown model entered! Please try again...")
-        continue
-    loop = False
 
-label_path = base_path + "dict.txt"
-model_path = base_path + "model.tflite"
-confidence_threshold = 0.5
+label_path = 'models/lego_ml3.txt'
+model_path = 'models/lego_ml3.tflite'
+confidence_threshold = 0.7
 
 ### END OF CUSTOM SECTION ###
 
@@ -126,9 +109,7 @@ class FrontEnd(object):
         # djitellopy kinna sucks and crashes when there are no more frames from the video feed My method simply waits
         # and retry getting frames later instead
         self.frame_read = VideoRead(self.tello)
-
-        # Toggle enabling object detection on live feed
-        # Warning: will cause lots of lag!
+        
         self.ai_enabled = False
         ### END OF CUSTOM SECTION ###
 
@@ -173,7 +154,7 @@ class FrontEnd(object):
     ### START OF CUSTOM SECTION ###
     # Handles adding additional stuff onto an image.
     # This contains stats, flipping images and changing colours.
-    def _post_process_image(self, image: np.ndarray, stats: bool, flipped: bool, colour: bool, toggle: bool):
+    def _post_process_image(self, image: np.ndarray, stats: bool, flipped: bool, colour: bool):
         if stats:
             # Display battery
             text = "Battery: {}%".format(self.tello.get_battery())
@@ -184,8 +165,12 @@ class FrontEnd(object):
             text = "Last snapshot: {}".format(self.last_snapshot)
             cv2.putText(image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
 
-            text = "ML enabled: {}".format(toggle)
+            if self.ai_enabled:
+                text = "AI Vision: Enabled"
+            else:
+                text = "AI Vision: Disabled"
             cv2.putText(image, text, (5, FRAME_HEIGHT - 75), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
+
         if flipped:
             image = np.rot90(image)
             image = np.flipud(image)
@@ -209,19 +194,17 @@ class FrontEnd(object):
                         self.keydown(event.key)
                 elif event.type == pygame.KEYUP:
                     self.keyup(event.key)
-
             self.screen.fill([0, 0, 0])
-
+            
             if self.ai_enabled:
-                frame = self._post_process_image(
-                    self._process_image(self.frame_read.get_frame()), True, True, False, True)
+                frame = self._post_process_image(self._process_image(self.frame_read.get_frame()), True, True, False)
             else:
-                frame = self._post_process_image(self.frame_read.get_frame(), True, True, False, False)
+                frame = self._post_process_image(self.frame_read.get_frame(), True, True, False)
             frame = pygame.surfarray.make_surface(frame)
             self.screen.blit(frame, (0, 0))
             pygame.display.update()
 
-            time.sleep(1 / FPS)
+            #time.sleep(1 / FPS)
         ### START OF CUSTOM SECTION ###
         # Stop video feed
         self.frame_read.stop()
@@ -266,28 +249,20 @@ class FrontEnd(object):
                 processed_image = self._post_process_image(self._process_image(self.frame_read.get_frame()),
                                                            True,
                                                            False,
-                                                           False,
-                                                           True)
+                                                           False)
                 end_time = time.time() - start_time
                 print("Took {} seconds".format(end_time))
                 path = os.path.join(os.getcwd(), "picture-{}.png".format(self.last_snapshot))
                 # Show processed frame in a seperate window
                 image = Image.fromarray(processed_image, "RGB")
                 image.save(path)
-                if platform == "linux" or platform == "linux2":
-                    # had major issues getting pillow's image.show working properly on linu. this uses a more low-level
-                    # approach
-                    subprocess.Popen(["feh", path])
-                elif platform == "win32":
-                    image.show()
 
             # Run the above process in a thread, basically allowing it to run in the background on its own
             # This way, we can still retain control over the drone even while the object detection is taking place
             threading.Thread(target=process).start()
-        elif key == pygame.K_SPACE:
-            self.ai_enabled = not self.ai_enabled
-            print("AI on live feed: {}".format(self.ai_enabled))
-
+        elif key == pygame.K_e:
+            self.ai_enabled = not(self.ai_enabled)
+            print("AI vision: {}".format(self.ai_enabled))
 
     def keyup(self, key):
         """
