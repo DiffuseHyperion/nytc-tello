@@ -1,3 +1,9 @@
+"""
+This version was created after the new control.py script was shown.
+The new control.py is the original control.py, but with the screenshotting function added in.
+This script aims to follow what control.py does, but with our own improvements
+"""
+
 import os.path
 
 from djitellopy import Tello
@@ -109,8 +115,7 @@ class FrontEnd(object):
         # djitellopy kinna sucks and crashes when there are no more frames from the video feed My method simply waits
         # and retry getting frames later instead
         self.frame_read = VideoRead(self.tello)
-        
-        self.ai_enabled = False
+
         ### END OF CUSTOM SECTION ###
 
     ### START OF CUSTOM SECTION ###
@@ -164,13 +169,6 @@ class FrontEnd(object):
             # Display last snapshot timing
             text = "Last snapshot: {}".format(self.last_snapshot)
             cv2.putText(image, text, (5, FRAME_HEIGHT - 40), cv2.FONT_HERSHEY_SIMPLEX, 1, self.text_color, 2)
-
-            if self.ai_enabled:
-                text = "AI Vision: Enabled"
-            else:
-                text = "AI Vision: Disabled"
-            cv2.putText(image, text, (5, FRAME_HEIGHT - 75), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
         if flipped:
             image = np.rot90(image)
             image = np.flipud(image)
@@ -195,11 +193,9 @@ class FrontEnd(object):
                 elif event.type == pygame.KEYUP:
                     self.keyup(event.key)
             self.screen.fill([0, 0, 0])
-            
-            if self.ai_enabled:
-                frame = self._post_process_image(self._process_image(self.frame_read.get_frame()), True, True, False)
-            else:
-                frame = self._post_process_image(self.frame_read.get_frame(), True, True, False)
+
+            frame = self._post_process_image(self.frame_read.get_frame(), True, True, False)
+
             frame = pygame.surfarray.make_surface(frame)
             self.screen.blit(frame, (0, 0))
             pygame.display.update()
@@ -233,39 +229,37 @@ class FrontEnd(object):
         elif key == pygame.K_d:  # set yaw clockwise velocity
             self.yaw_velocity = S
         elif key == pygame.K_RETURN:
-            if self.ai_enabled:
-                print("AI Vision already enabled! Ignoring screenshot request.")
+            # Update "Last snapshot time" label
+            t = time.localtime()
+            self.last_snapshot = time.strftime("%H:%M:%S", t)
+            if self.text_color == (0, 0, 255):
+                self.text_color = (255, 0, 0)
             else:
-                # Update "Last snapshot time" label
-                t = time.localtime()
-                self.last_snapshot = time.strftime("%H:%M:%S", t)
-                if self.text_color == (0, 0, 255):
-                    self.text_color = (255, 0, 0)
-                else:
-                    self.text_color = (0, 0, 255)
+                self.text_color = (0, 0, 255)
 
-                ### START OF CUSTOM SECTION ###
-                # Function to process current frame, including object detection
-                def process():
-                    print("Processing image...")
-                    start_time = time.time()
-                    processed_image = self._post_process_image(self._process_image(self.frame_read.get_frame()),
-                                                               True,
-                                                               False,
-                                                               False)
-                    end_time = time.time() - start_time
-                    print("Took {} seconds".format(end_time))
-                    path = os.path.join(os.getcwd(), "picture-{}.png".format(self.last_snapshot))
-                    # Show processed frame in a seperate window
-                    image = Image.fromarray(processed_image, "RGB")
-                    image.save(path)
+            ### START OF CUSTOM SECTION ###
+            # Function to process current frame, including object detection
+            def process():
+                print("Processing image...")
+                start_time = time.time()
+                processed_image = self._post_process_image(self._process_image(self.frame_read.get_frame()),
+                                                           True,
+                                                           False,
+                                                           False)
+                end_time = time.time() - start_time
+                print("Took {} seconds".format(end_time))
+                path = os.path.join(os.getcwd(), "picture-{}.png".format(self.last_snapshot))
+                # Show processed frame in a seperate window
+                image = Image.fromarray(processed_image, "RGB")
+                image.save(path)
+                if platform == "linux" or platform == "linux2":
+                    subprocess.Popen(["feh", path])
+                elif platform == "win32":
+                    image.show()
 
-                # Run the above process in a thread, basically allowing it to run in the background on its own
-                # This way, we can still retain control over the drone even while the object detection is taking place
-                threading.Thread(target=process).start()
-        elif key == pygame.K_e:
-            self.ai_enabled = not self.ai_enabled
-            print("AI vision: {}".format(self.ai_enabled))
+            # Run the above process in a thread, basically allowing it to run in the background on its own
+            # This way, we can still retain control over the drone even while the object detection is taking place
+            threading.Thread(target=process).start()
 
     def keyup(self, key):
         """
